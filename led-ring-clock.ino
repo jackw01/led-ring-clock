@@ -79,7 +79,8 @@ int timer = 0;
 CRGB handColor, hourColor, minuteColor, secondColor;
 
 void setup() {
-    Serial.begin(115200);
+
+	Serial.begin(115200);
 
 	// Init FastLED
 	FastLED.addLeds<NEOPIXEL, pinLeds>(leds, neoPixelRingSize);
