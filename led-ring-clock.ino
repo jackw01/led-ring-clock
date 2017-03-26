@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2016 jackw01
+// Copyright (c) 2015-2017 jackw01
 // This code is distrubuted under the MIT License, see LICENSE for details
 //
 
@@ -32,18 +32,21 @@ CRGB off = CRGB(0, 0, 0);
 
 // Clock face colors
 // red, orange, yellow, green, cyan, blue, magenta, and white are acceptable, along with CRGB(r, g, b)
-const int colorSchemeMax = 7;
+const int colorSchemeMax = 6;
 const CRGB colorSchemes[colorSchemeMax + 1][4] = {{off, // Color when only one is needed (deprecated)
 							     				   red, // Color for hour display
 							     				   green, // Color for minute display
 							     				   blue}, // Color for second display
-							     			      {CRGB(0, 0, 0), 0xffa54f, 0xffa048, CRGB(0, 130, 255)},
-							     			      {CRGB(0, 0, 0), 0xffa54f, 0xffa048, CRGB(255, 25, 0)},
-							     			      {CRGB(0, 0, 0), 0xffffff, 0xffffff, CRGB(0, 130, 255)},
-							     			      {CRGB(0, 0, 0), 0xffffff, 0xffffff, CRGB(255, 25, 0)},
+							     			      {CRGB(0, 0, 0), CRGB(255, 255, 255), CRGB(255, 255, 255), CRGB(0, 130, 255)},
+							     			      {CRGB(0, 0, 0), CRGB(255, 255, 255), CRGB(255, 255, 255), CRGB(255, 25, 0)},
 						  	     			      {CRGB(0, 0, 0), CRGB(64, 0, 128), CRGB(255, 72, 0), CRGB(255, 164, 0)},
 						         			      {CRGB(0, 0, 0), CRGB(255, 25, 0), CRGB(255, 164, 0), CRGB(255, 224, 0)},
-						  	     			      {CRGB(0, 0, 0), CRGB(0, 0, 255), CRGB(0, 164, 255), CRGB(0, 224, 255)}};
+						  	     			      {CRGB(0, 0, 0), CRGB(0, 0, 255), CRGB(0, 164, 255), CRGB(0, 224, 255)},
+												  {CRGB(0, 0, 0), CRGB(255, 72, 0), CRGB(255, 164, 0), CRGB(0, 255, 164)}};
+
+const int gradientMax = 1;
+const CRGB gradients[gradientMax + 1][6] = {{CRGB(72, 0, 96), CRGB(255, 72, 0), CRGB(255, 164, 0), CRGB(255, 224, 0), CRGB(0, 255, 164), CRGB(0, 208, 	255)},
+											{CRGB(72, 0, 96), CRGB(255, 72, 0), CRGB(255, 164, 0), CRGB(255, 224, 0), CRGB(0, 255, 164), CRGB(0, 208, 255)}};
 
 // Setup ends
 // Code starts here
@@ -69,8 +72,8 @@ const uint8_t PROGMEM gamma[] = {
 CRGB leds[neoPixelRingSize];
 RTC_DS1307 rtc;
 
-int clockMode, colorScheme;
-int clockModeMax = 4;
+int clockMode, colorScheme, gradient;
+int clockModeMax = 5;
 int buttonState = 0;
 const int minBrightness = 3;
 int counter = 0;
@@ -95,6 +98,7 @@ void setup() {
 
     colorScheme = EEPROM.read(0);
     clockMode = EEPROM.read(1);
+	gradient = 0;
 
 	handColor = colorSchemes[colorScheme][0];
 	hourColor = colorSchemes[colorScheme][1];
@@ -152,6 +156,7 @@ void showClock() {
 	else if (clockMode == 2) rainbowDotClock();
 	else if (clockMode == 3) timeColorClock();
 	else if (clockMode == 4) glowClock();
+	else if (clockMode == 5) gradientHandsClock();
 }
 
 // Show a ring clock
@@ -327,6 +332,35 @@ void glowClock() {
     FastLED.show();
 }
 
+// Show a clock with gradient colored hands
+void gradientHandsClock() {
+
+    clearLeds();
+
+    DateTime now = rtc.now();
+
+    int newHour;
+    int newMinute;
+    int newSecond;
+
+    int hour;
+
+	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
+    else hour = now.hour() * (neoPixelRingSize / 12);
+
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+
+	for (int i = 0; i < 6; i++) blendAdd(wrap(i + (newHour - 1)), gradients[gradient][i], 0.8);
+
+	for (int i = 0; i < 4; i++) blendAdd(wrap(i + (newMinute - 1)), gradients[gradient][i + 2], 0.9);
+
+	for (int i = 0; i < 2; i++) blendAdd(wrap(i + (newSecond - 1)), gradients[gradient][i + 4], 1);
+
+    FastLED.show();
+}
+
 void clearLeds() {
 
 	for (int i = 0; i < neoPixelRingSize; i++) leds[i] = CRGB(0, 0, 0);
@@ -342,6 +376,7 @@ void blendAdd(int position, CRGB color, double brightness) {
 
 // Wrap around LED ring
 int wrap(int i) {
+
 	if (i >= neoPixelRingSize) return i - neoPixelRingSize;
 	else if (i < 0) return neoPixelRingSize + i;
 	else return i;
