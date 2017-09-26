@@ -20,7 +20,7 @@ const int pinBrightness = 0;
 const int neoPixelRingSize = 24; // Number of NeoPixels in ring
 
 // Default colors
-CRGB red = CRGB(255, 25, 0);
+CRGB red = CRGB(255, 0, 0);
 CRGB orange = CRGB(255, 78, 0);
 CRGB yellow = CRGB(255, 237, 0);
 CRGB green = CRGB(0, 255, 23);
@@ -40,9 +40,9 @@ const CRGB colorSchemes[colorSchemeMax + 1][4] = {{off, // Color when only one i
 							     			      {CRGB(0, 0, 0), CRGB(255, 255, 255), CRGB(255, 255, 255), CRGB(0, 130, 255)},
 							     			      {CRGB(0, 0, 0), CRGB(255, 255, 255), CRGB(255, 255, 255), CRGB(255, 25, 0)},
 						  	     			      {CRGB(0, 0, 0), CRGB(64, 0, 128), CRGB(255, 72, 0), CRGB(255, 164, 0)},
-						         			      {CRGB(0, 0, 0), CRGB(255, 25, 0), CRGB(255, 164, 0), CRGB(255, 224, 0)},
-						  	     			      {CRGB(0, 0, 0), CRGB(0, 0, 255), CRGB(0, 164, 255), CRGB(0, 224, 255)},
-												  {CRGB(0, 0, 0), CRGB(255, 72, 0), CRGB(255, 164, 0), CRGB(0, 255, 164)}};
+						         			      {CRGB(0, 0, 0), CRGB(255, 25, 0), CRGB(255, 84, 0), CRGB(255, 224, 0)},
+						  	     			      {CRGB(0, 0, 0), CRGB(0, 0, 255), CRGB(0, 84, 255), CRGB(0, 255, 255)},
+												  {CRGB(0, 0, 0), CRGB(255, 0, 96), CRGB(255, 84, 0), CRGB(0, 255, 164)}};
 
 const int gradientMax = 1;
 const CRGB gradients[gradientMax + 1][6] = {{CRGB(72, 0, 96), CRGB(255, 72, 0), CRGB(255, 164, 0), CRGB(255, 224, 0), CRGB(0, 255, 164), CRGB(0, 208, 	255)},
@@ -73,17 +73,20 @@ CRGB leds[neoPixelRingSize];
 RTC_DS1307 rtc;
 
 int clockMode, colorScheme, gradient;
-int clockModeMax = 5;
+int clockModeMax = 4;
 int buttonState = 0;
-const int minBrightness = 3;
+const int minBrightness = 4;
 int counter = 0;
 int timer = 0;
+
+const int debugMessageInterval = 1000;
+int lastDebugMessageTime = 0;
 
 CRGB handColor, hourColor, minuteColor, secondColor;
 
 void setup() {
 
-	Serial.begin(115200);
+	Serial.begin(57600);
 
 	// Init FastLED
 	FastLED.addLeds<NEOPIXEL, pinLeds>(leds, neoPixelRingSize);
@@ -104,6 +107,28 @@ void setup() {
 	hourColor = colorSchemes[colorScheme][1];
 	minuteColor = colorSchemes[colorScheme][2];
 	secondColor = colorSchemes[colorScheme][3];
+
+    // Serial debug
+    Serial.println("WS2812 LED Ring Clock by jackw01");
+
+    // Light mode
+    if (digitalRead(pinButton) == LOW) {
+        for (int i = 0; i < neoPixelRingSize; i++) leds[i] = white;
+        FastLED.show();
+        delay(60000);
+    }
+
+    // Test animation
+    for (int i = 0; i < neoPixelRingSize; i++) {
+        leds[i] = white;
+        FastLED.show();
+        delay(40);
+    }
+    for (int i = 0; i < neoPixelRingSize; i++) {
+        leds[i] = off;
+        FastLED.show();
+        delay(40);
+    }
 }
 
 void loop() {
@@ -135,8 +160,12 @@ void loop() {
 		}
     }
 
-    showClock();
+    if (millis() > lastDebugMessageTime + debugMessageInterval) {
+        lastDebugMessageTime = millis();
+        printDebugMessage();
+    }
 
+    showClock();
     delay(20);
 
     counter ++;
@@ -148,8 +177,7 @@ void loop() {
 
 void showClock() {
 
-	int brightnessPotValue = map(analogRead(pinBrightness), 0, 1023, minBrightness, 255);
-	FastLED.setBrightness(brightnessPotValue);
+	FastLED.setBrightness(map(analogRead(pinBrightness), 0, 1023, minBrightness, 255));
 
     if (clockMode == 0) ringClock();
 	else if (clockMode == 1) dotClock();
@@ -157,6 +185,30 @@ void showClock() {
 	else if (clockMode == 3) timeColorClock();
 	else if (clockMode == 4) glowClock();
 	else if (clockMode == 5) gradientHandsClock();
+}
+
+void printDebugMessage() {
+
+    Serial.print("Current date/time: ");
+    DateTime now = rtc.now();
+    Serial.print(now.year(), DEC);
+    Serial.print("/");
+    Serial.print(now.month(), DEC);
+    Serial.print("/");
+    Serial.print(now.day(), DEC);
+    Serial.print(" ");
+    Serial.print(now.hour(), DEC);
+    Serial.print(":");
+    Serial.print(now.minute(), DEC);
+    Serial.print(":");
+    Serial.print(now.second(), DEC);
+    Serial.println();
+    Serial.print("Display mode: ");
+    Serial.println(clockMode);
+    Serial.print("Color scheme: ");
+    Serial.println(colorScheme);
+    Serial.print("Brightness: ");
+    Serial.println(map(analogRead(pinBrightness), 0, 1023, minBrightness, 255));
 }
 
 // Show a ring clock
@@ -180,12 +232,9 @@ void ringClock() {
     newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
 
     if (newMinute > newHour) {
-
         for (int i = 0; i < newMinute; i++) leds[i] = minuteColor;
         for (int i = 0; i < newHour; i++) leds[i] = hourColor;
-
     } else {
-
         for (int i = 0; i < newHour; i++) leds[i] = hourColor;
         for (int i = 0; i < newMinute; i++) leds[i] = minuteColor;
     }
