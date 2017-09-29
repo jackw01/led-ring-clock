@@ -17,7 +17,7 @@ const int pinLeds = 3;
 const int pinButton = 4;
 const int pinBrightness = 0;
 
-const int neoPixelRingSize = 24; // Number of NeoPixels in ring
+const int ledRingSize = 24; // Number of LEDs in ring
 
 // Default colors
 CRGB red = CRGB(255, 0, 0);
@@ -69,13 +69,15 @@ const uint8_t PROGMEM gamma[] = {
   177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
   215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
-CRGB leds[neoPixelRingSize];
+CRGB leds[ledRingSize];
 RTC_DS1307 rtc;
 
 int clockMode, colorScheme, gradient;
 int clockModeMax = 4;
 int buttonState = 0;
 const int minBrightness = 4;
+int currentBrightness;
+uint8_t previousBrightness[16];
 int counter = 0;
 int timer = 0;
 
@@ -89,8 +91,7 @@ void setup() {
 	Serial.begin(57600);
 
 	// Init FastLED
-	FastLED.addLeds<NEOPIXEL, pinLeds>(leds, neoPixelRingSize);
-	//FastLED.setCorrection(TypicalSMD5050);
+	FastLED.addLeds<NEOPIXEL, pinLeds>(leds, ledRingSize);
 	FastLED.setTemperature(Halogen);
     FastLED.show();
 
@@ -109,22 +110,22 @@ void setup() {
 	secondColor = colorSchemes[colorScheme][3];
 
     // Serial debug
-    Serial.println("WS2812 LED Ring Clock by jackw01");
+    Serial.println("WS2812B LED Ring Clock by jackw01");
 
     // Light mode
     if (digitalRead(pinButton) == LOW) {
-        for (int i = 0; i < neoPixelRingSize; i++) leds[i] = white;
+        for (int i = 0; i < ledRingSize; i++) leds[i] = white;
         FastLED.show();
         delay(60000);
     }
 
     // Test animation
-    for (int i = 0; i < neoPixelRingSize; i++) {
+    for (int i = 0; i < ledRingSize; i++) {
         leds[i] = white;
         FastLED.show();
         delay(40);
     }
-    for (int i = 0; i < neoPixelRingSize; i++) {
+    for (int i = 0; i < ledRingSize; i++) {
         leds[i] = off;
         FastLED.show();
         delay(40);
@@ -177,7 +178,20 @@ void loop() {
 
 void showClock() {
 
-	FastLED.setBrightness(map(analogRead(pinBrightness), 0, 1023, minBrightness, 255));
+    // Moving average of brightness to smooth out noisy potentiometers
+    int sum = 0;
+
+    for (int i = 15; i > 0; i--) {
+        previousBrightness[i] = previousBrightness[i - 1];
+        sum += previousBrightness[i];
+    }
+
+    previousBrightness[0] = map(analogRead(pinBrightness), 0, 1023, minBrightness, 255);
+    sum += previousBrightness[0];
+
+    currentBrightness = sum / 16;
+
+	FastLED.setBrightness(currentBrightness);
 
     if (clockMode == 0) ringClock();
 	else if (clockMode == 1) dotClock();
@@ -208,7 +222,7 @@ void printDebugMessage() {
     Serial.print("Color scheme: ");
     Serial.println(colorScheme);
     Serial.print("Brightness: ");
-    Serial.println(map(analogRead(pinBrightness), 0, 1023, minBrightness, 255));
+    Serial.println(currentBrightness);
 }
 
 // Show a ring clock
@@ -224,12 +238,12 @@ void ringClock() {
 
     int hour;
 
-	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+	if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
     if (newMinute > newHour) {
         for (int i = 0; i < newMinute; i++) leds[i] = minuteColor;
@@ -257,12 +271,12 @@ void dotClock() {
 
     int hour;
 
-	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+	if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
 	for (int i = newHour - 1; i < newHour + 2; i++) leds[wrap(i)] = hourColor;
 
@@ -286,12 +300,12 @@ void rainbowDotClock() {
 
     int hour;
 
-	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+	if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
 	CRGB newHourColor = Wheel(int(map(newHour, 0, 12, 0, 255)));
 	CRGB newMinuteColor = Wheel(int(map(now.minute(), 0, 59, 0, 255)));
@@ -321,12 +335,12 @@ void timeColorClock() {
 
     int hour;
 
-	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+	if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
     decimalHour = now.hour() + map(now.minute() + map(now.second(), 0, 59, 0, 1), 0, 59, 0, 1);
 
@@ -354,14 +368,14 @@ void glowClock() {
 
     int hour;
 
-    if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+    if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
-    for (int i = -6; i < neoPixelRingSize + 6; i++) {
+    for (int i = -6; i < ledRingSize + 6; i++) {
 
 		int j;
 
@@ -394,12 +408,12 @@ void gradientHandsClock() {
 
     int hour;
 
-	if (now.hour() > 12) hour = (now.hour() - 12) * (neoPixelRingSize / 12);
-    else hour = now.hour() * (neoPixelRingSize / 12);
+	if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+    else hour = now.hour() * (ledRingSize / 12);
 
-    newHour = hour + int(map(now.minute(), 0, 59, 0, (neoPixelRingSize / 12) - 1));
-    newMinute = int(map(now.minute(), 0, 59, 0, neoPixelRingSize - 1));
-    newSecond = int(map(now.second(), 0, 59, 0, neoPixelRingSize - 1));
+    newHour = hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));
+    newMinute = int(map(now.minute(), 0, 59, 0, ledRingSize - 1));
+    newSecond = int(map(now.second(), 0, 59, 0, ledRingSize - 1));
 
 	for (int i = 0; i < 6; i++) blendAdd(wrap(i + (newHour - 1)), gradients[gradient][i], 0.8);
 
@@ -412,7 +426,7 @@ void gradientHandsClock() {
 
 void clearLeds() {
 
-	for (int i = 0; i < neoPixelRingSize; i++) leds[i] = CRGB(0, 0, 0);
+	for (int i = 0; i < ledRingSize; i++) leds[i] = CRGB(0, 0, 0);
 }
 
 // Enhanced additive blending
@@ -426,8 +440,8 @@ void blendAdd(int position, CRGB color, double brightness) {
 // Wrap around LED ring
 int wrap(int i) {
 
-	if (i >= neoPixelRingSize) return i - neoPixelRingSize;
-	else if (i < 0) return neoPixelRingSize + i;
+	if (i >= ledRingSize) return i - ledRingSize;
+	else if (i < 0) return ledRingSize + i;
 	else return i;
 }
 
