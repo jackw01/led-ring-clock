@@ -19,15 +19,15 @@ const uint8_t pinBrightness = 0;
 const int ledRingSize = 24;
 
 // Default colors - tweaked to look right on WS2812Bs
-CRGB red = CRGB(255, 0, 0);
-CRGB orange = CRGB(255, 78, 0);
-CRGB yellow = CRGB(255, 237, 0);
-CRGB green = CRGB(0, 255, 23);
-CRGB cyan = CRGB(0, 247, 255);
-CRGB blue = CRGB(0, 21, 255);
-CRGB magenta = CRGB(190, 0, 255);
-CRGB white = CRGB(255, 255, 255);
-CRGB off = CRGB(0, 0, 0);
+const CRGB red = CRGB(255, 0, 0);
+const CRGB orange = CRGB(255, 78, 0);
+const CRGB yellow = CRGB(255, 237, 0);
+const CRGB green = CRGB(0, 255, 23);
+const CRGB cyan = CRGB(0, 247, 255);
+const CRGB blue = CRGB(0, 21, 255);
+const CRGB magenta = CRGB(190, 0, 255);
+const CRGB white = CRGB(255, 255, 255);
+const CRGB off = CRGB(0, 0, 0);
 
 // Default clock face colors
 // red, orange, yellow, green, cyan, blue, magenta, and white are acceptable, along with CRGB(r, g, b)
@@ -46,10 +46,10 @@ const CRGB colorSchemes[colorSchemeCount][4] = {
 
 // Clock settings
 const bool useEnhancedRenderer = true;
-const int buttonClickRepeatDelayMs = 1500;
-const int buttonLongPressDelayMs = 300;
 const bool showSecondHand = true;
 const bool twelveHour = true;
+const int buttonClickRepeatDelayMs = 1500;
+const int buttonLongPressDelayMs = 300;
 
 // Serial
 const long serialPortBaudRate = 115200;
@@ -59,8 +59,8 @@ const int debugMessageIntervalMs = 2000;
 typedef enum {
     ClockModeRingClock,
     ClockModeDotClock,
+    ClockModeDotClockTrail,
     ClockModeDotClockColorChange,
-    ClockModeDotClockTimeColor,
     ClockModeGlowClock,
     ClockModeCount
 } ClockMode;
