@@ -1,4 +1,5 @@
 //
+// WS2812 LED Analog Clock Firmware
 // Copyright (c) 2016-2018 jackw01
 // This code is distrubuted under the MIT License, see LICENSE for details
 //
@@ -9,8 +10,9 @@
 #include <EEPROM.h>
 #include <RTClib.h>
 
-#include "config.h"
+#include "constants.h"
 
+// LED ring and RTC
 CRGB leds[ledRingSize];
 RTC_DS1307 rtc;
 
@@ -21,6 +23,9 @@ int lastButtonClickTime = 0;
 int lastDebugMessageTime = 0;
 uint8_t currentBrightness;
 uint8_t previousBrightness[16];
+int lastSecondsValue = 0;
+int lastMillisecondsSetTime = 0;
+int milliseconds;
 DateTime now;
 
 void setup() {
@@ -54,7 +59,7 @@ void setup() {
 void loop() {
 	int currentTime = millis();
 	if (currentTime - lastLoopTime > runLoopIntervalMs) {
-		lastLoopTime = millis();
+		lastLoopTime = currentTime;
 		// Handle button
 	    if (digitalRead(pinButton) == LOW && currentTime - lastButtonClickTime > buttonClickRepeatDelayMs) {
 			delay(buttonLongPressDelayMs);
@@ -87,8 +92,18 @@ void loop() {
 	    currentBrightness = sum / 16;
 		FastLED.setBrightness(currentBrightness);
 
-		// Show clock
+		// Get time and calculate milliseconds value that is synced with the RTC's second count
 		now = rtc.now();
+		int currentSeconds = now.second();
+		if (currentSeconds != lastSecondsValue) {
+			lastSecondsValue = currentSeconds;
+			milliseconds = 0;
+		}
+		currentTime = millis();
+		milliseconds = (milliseconds + currentTime - lastMillisecondsSetTime);
+		lastMillisecondsSetTime = currentTime;
+
+		// Show clock
 		clearLeds();
 	    showClock();
 	}
@@ -142,32 +157,32 @@ void printDebugMessage() {
 
 // Show a ring clock
 void ringClock() {
-    int h = hourPosition();
+	int h = hourPosition();
     int m = minutePosition();
-    int s = secondPosition();
+    float s = floatSecondPosition();
 
     if (m > h) {
-        for (int i = 0; i < m; i++) leds[i] = minuteColor();
-        for (int i = 0; i < h; i++) leds[i] = hourColor();
+        for (int i = 0; i < m; i++) setLed(i, minuteColor(), BlendModeOver);
+        for (int i = 0; i < h; i++) setLed(i, hourColor(), BlendModeOver);
     } else {
-        for (int i = 0; i < h; i++) leds[i] = hourColor();
-        for (int i = 0; i < m; i++) leds[i] = minuteColor();
+        for (int i = 0; i < h; i++) setLed(i, hourColor(), BlendModeOver);
+        for (int i = 0; i < m; i++) setLed(i, minuteColor(), BlendModeOver);
     }
 
-    if (showSecondHand) leds[s] = secondColor();
+    if (showSecondHand) setLed(s, secondColor(), BlendModeAlpha);
 
     FastLED.show();
 }
 
 // Show a more traditional dot clock
 void dotClock() {
-	int h = hourPosition();
-    int m = minutePosition();
-    int s = secondPosition();
+	float h = floatHourPosition();
+    float m = floatMinutePosition();
+    float s = floatSecondPosition();
 
-	for (int i = h - 1; i < h + 2; i++) leds[wrap(i)] = hourColor();
-    leds[m] = minuteColor();
-    if (showSecondHand) [s] = secondColor();
+	for (float i = h - 1; i < h + 2; i++) setLed(i, hourColor(), BlendModeAdd);
+	setLed(m, minuteColor(), BlendModeAdd);
+	if (showSecondHand) setLed(s, secondColor(), BlendModeAdd);
 
     FastLED.show();
 }
@@ -194,9 +209,9 @@ void timeColorClock() {
 	int h = hourPosition();
     int m = minutePosition();
     int s = secondPosition();
-    float decHour = decimalHour();
+    float fHour = floatHour();
 
-    CRGB pixelColor = CHSV((uint8_t)mapFloat(fmod(20.0 - decHour, 24.0), 0.0, 24.0, 0.0, 255.0), 255, 255);
+    CRGB pixelColor = CHSV((uint8_t)mapFloat(fmod(20.0 - fHour, 24.0), 0.0, 24.0, 0.0, 255.0), 255, 255);
 
     for (int i = h - 1; i < h + 2; i++) leds[wrap(i)] = pixelColor;
     leds[m] = pixelColor;
@@ -235,10 +250,10 @@ int hourPosition() {
 		int hour;
 		if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
 	    else hour = now.hour() * (ledRingSize / 12);
-		return hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1));;
+		return hour + map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1);
 	} else {
 		int hour = now.hour() * (ledRingSize / 24);
-		return hour + int(map(now.minute(), 0, 59, 0, (ledRingSize / 24) - 1));;
+		return hour + map(now.minute(), 0, 59, 0, (ledRingSize / 24) - 1);
 	}
 }
 
@@ -250,8 +265,29 @@ int secondPosition() {
 	return map(now.second(), 0, 59, 0, ledRingSize - 1);
 }
 
-float decimalHour() {
+float floatHour() {
 	return (float)now.hour() + mapFloat(now.minute() + mapFloat(now.second(), 0.0, 59.0, 0.0, 1.0), 0.0, 59.0, 0.0, 1.0);
+}
+
+// Get positions as a float mapped to ring size
+float floatHourPosition() {
+	if (twelveHour) {
+		int hour;
+		if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
+	    else hour = now.hour() * (ledRingSize / 12);
+		return hour + mapFloat(now.minute(), 0.0, 59.0, 0.0, (ledRingSize / 12.0) - 1.0);
+	} else {
+		int hour = now.hour() * (ledRingSize / 24);
+		return hour + mapFloat(now.minute(), 0, 59, 0, (ledRingSize / 24.0) - 1.0);
+	}
+}
+
+float floatMinutePosition() {
+	return mapFloat(now.minute() + ((1 / 60) * now.second()), 0.0, 59.0, 0.0, (float)ledRingSize);
+}
+
+float floatSecondPosition() {
+	return mapFloat(now.second() + (0.001 * milliseconds), 0.0, 60.0, 0.0, (float)ledRingSize);
 }
 
 // Get colors
@@ -272,11 +308,48 @@ void clearLeds() {
 	for (int i = 0; i < ledRingSize; i++) leds[i] = CRGB(0, 0, 0);
 }
 
-// Enhanced additive blending
+// Set LED(s) at a position with enhanced rendering
+void setLed(float position, CRGB color, BlendMode blendMode) {
+	if (useEnhancedRenderer) {
+		int low = floor(position);
+		int high = ceil(position);
+		float lowFactor = ((float)high - position);
+		float highFactor = (position - (float)low);
+		if (blendMode == BlendModeAdd) {
+			blendAdd(wrap(low), color, lowFactor);
+			blendAdd(wrap(high), color, highFactor);
+		} else if (blendMode == BlendModeAlpha) {
+			blendAlpha(wrap(low), color, lowFactor);
+			blendAlpha(wrap(high), color, highFactor);
+		} else if (blendMode == BlendModeOver) {
+			blendOver(wrap(low), color, lowFactor);
+			blendOver(wrap(high), color, highFactor);
+		}
+	} else {
+		leds[wrap((int)position)] = color;
+	}
+}
+
+// Additive blending
 void blendAdd(int position, CRGB color, float factor) {
-	leds[position].r += color.r * factor;
-	leds[position].g += color.g * factor;
-	leds[position].b += color.b * factor;
+	leds[position].r += min(color.r * factor, 255 - leds[position].r);
+	leds[position].g += min(color.g * factor, 255 - leds[position].g);
+	leds[position].b += min(color.b * factor, 255 - leds[position].b);
+}
+
+// Alpha blending (factor is the alpha value)
+void blendAlpha(int position, CRGB color, float factor) {
+	leds[position].r = (uint8_t)mapFloat(factor, 0.0, 1.0, leds[position].r, color.r);
+	leds[position].g = (uint8_t)mapFloat(factor, 0.0, 1.0, leds[position].g, color.g);
+	leds[position].b = (uint8_t)mapFloat(factor, 0.0, 1.0, leds[position].b, color.b);
+}
+
+// Overlay/replace blending
+void blendOver(int position, CRGB color, float factor) {
+	leds[position].r = color.r * factor;
+	leds[position].g = color.g * factor;
+	leds[position].b = color.b * factor;
+	leds[position] = color;
 }
 
 // Wrap around LED ring
