@@ -18,13 +18,13 @@ RTC_DS1307 rtc;
 
 // Globals to keep track of state
 int clockMode, colorScheme;
-int lastLoopTime = 0;
-int lastButtonClickTime = 0;
-int lastDebugMessageTime = 0;
+uint32_t lastLoopTime = 0;
+uint32_t lastButtonClickTime = 0;
+uint32_t lastDebugMessageTime = 0;
 uint8_t currentBrightness;
 uint8_t previousBrightness[16];
 int lastSecondsValue = 0;
-int lastMillisecondsSetTime = 0;
+uint32_t lastMillisecondsSetTime = 0;
 int milliseconds;
 DateTime now;
 
@@ -57,21 +57,22 @@ void setup() {
 }
 
 void loop() {
-	int currentTime = millis();
+	uint32_t currentTime = millis();
 	if (currentTime - lastLoopTime > runLoopIntervalMs) {
 		lastLoopTime = currentTime;
 		// Handle button
 	    if (digitalRead(pinButton) == LOW && currentTime - lastButtonClickTime > buttonClickRepeatDelayMs) {
 			delay(buttonLongPressDelayMs);
+			// Long press: clock mode, short press: color scheme
 			if (digitalRead(pinButton) == LOW) {
 				lastButtonClickTime = currentTime;
 				colorScheme ++;
 				if (colorScheme >= colorSchemeCount + 2) colorScheme = 0; // 2 special color schemes
-				EEPROM.write(0, colorScheme);
+				EEPROM.write(eepromAddrColorScheme, colorScheme);
 			} else {
 				clockMode ++;
 				if (clockMode >= ClockModeCount) clockMode = 0;
-				EEPROM.write(1, clockMode);
+				EEPROM.write(eepromAddrClockMode, clockMode);
 			}
 	    }
 
@@ -121,11 +122,8 @@ void showClock() {
 		case ClockModeDotClockTrail:
 			drawDotClockTrail();
 			break;
-		case ClockModeDotClockColorChange:
-			drawDotClockColorChange();
-			break;
-		case ClockModeGlowClock:
-			drawGlowClock();
+		case ClockModeDotClockGlow:
+			drawDotClockGlow();
 			break;
 	}
 }
@@ -159,7 +157,7 @@ void printDebugMessage() {
 void drawRingClock() {
 	int h = hourPosition();
     int m = minutePosition();
-    float s = floatSecondPosition();
+    float s = secondPosition();
 
     if (m > h) {
         for (int i = 0; i < m; i++) setLed(i, minuteColor(), BlendModeOver, 1.0);
@@ -176,9 +174,9 @@ void drawRingClock() {
 
 // Show a more traditional dot clock
 void drawDotClock() {
-	float h = floatHourPosition();
-    float m = floatMinutePosition();
-    float s = floatSecondPosition();
+	float h = hourPosition();
+    float m = minutePosition();
+    float s = secondPosition();
 
 	for (float i = h - 1.0; i < h + 2.0; i++) setLed(i, hourColor(), BlendModeAlpha, 1.0);
 	setLed(m, minuteColor(), BlendModeAlpha, 1.0);
@@ -187,11 +185,11 @@ void drawDotClock() {
     FastLED.show();
 }
 
-// Show a dot clock with longer hands
+// Show a dot clock where the hands have a glowing trail behing them
 void drawDotClockTrail() {
-	float h = floatHourPosition();
-    float m = floatMinutePosition();
-    float s = floatSecondPosition();
+	float h = hourPosition();
+    float m = minutePosition();
+    float s = secondPosition();
 
 	for (float i = h - 1.0; i < h + 2.0; i++) setLed(i, hourColor(), BlendModeAdd, 1.0);
 	for (float i = -4.0; i < 1.0; i++) setLed(m + i, minuteColor(), BlendModeAdd, 1.0 + (i / 5.0));
@@ -200,29 +198,24 @@ void drawDotClockTrail() {
     FastLED.show();
 }
 
-// Show a dot clock with hands that change color based on their position
-void drawDotClockColorChange() {
-	float h = floatHourPosition();
-    float m = floatMinutePosition();
-    float s = floatSecondPosition();
+// Show a dot clock where the hands glow outwards from their position
+void drawDotClockGlow() {
+	float h = hourPosition();
+    float m = minutePosition();
+    float s = secondPosition();
 
-	CRGB newHourColor = CHSV(map(now.hour(), 0, 24, 0, 255), 255, 255);
-	CRGB newMinuteColor = CHSV(map(now.minute(), 0, 59, 0, 255), 255, 255);
-	CRGB newSecondColor = CHSV(map(now.second(), 0, 59, 0, 255), 255, 255);
-
-	for (float i = h - 1.0; i < h + 2.0; i++) setLed(i, newHourColor, BlendModeAdd, 1.0);
-	setLed(m, newMinuteColor, BlendModeAdd, 1.0);
-	if (showSecondHand) setLed(s, newSecondColor, BlendModeAdd, 1.0);
-
-    FastLED.show();
-}
-
-// Show a dot clock where the hands overlap with additive blending
-void drawGlowClock() {
-	int h = hourPosition();
-    int m = minutePosition();
-    int s = secondPosition();
-
+	for (float i = h - hourGlowWidth; i <= h + hourGlowWidth; i++) {
+		setLed(i, hourColor(), BlendModeAdd, mapFloat(fabs(h - i), 0.0, hourGlowWidth, 1.0, 0.1));
+	}
+	for (float i = m - minuteGlowWidth; i <= m + minuteGlowWidth; i++) {
+		setLed(i, minuteColor(), BlendModeAdd, mapFloat(fabs(m - i), 0.0, minuteGlowWidth, 1.0, 0.1));
+	}
+	if (showSecondHand) {
+		for (float i = s - secondGlowWidth; i <= s + secondGlowWidth; i++) {
+			setLed(i, secondColor(), BlendModeAdd, mapFloat(fabs(s - i), 0.0, secondGlowWidth, 1.0, 0.1));
+		}
+	}
+	/*
     for (int i = -6; i < ledRingSize + 6; i++) {
 		int j;
 		for (j = 0; j <= 4; j++) {
@@ -236,7 +229,7 @@ void drawGlowClock() {
 				if (s + j == i || s - j == i) blendAdd(wrap(i), CRGB(0, 0, 255), 1 - mapFloat(j, 0.0, 1.0, 0.1, 0.65));
 			}
 		}
-    }
+    }*/
 
     FastLED.show();
 }
@@ -247,28 +240,7 @@ float floatHour() {
 }
 
 // Get positions mapped to ring size
-int hourPosition() {
-	if (twelveHour) {
-		int hour;
-		if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
-	    else hour = now.hour() * (ledRingSize / 12);
-		return hour + map(now.minute(), 0, 59, 0, (ledRingSize / 12) - 1);
-	} else {
-		int hour = now.hour() * (ledRingSize / 24);
-		return hour + map(now.minute(), 0, 59, 0, (ledRingSize / 24) - 1);
-	}
-}
-
-int minutePosition() {
-	return map(now.minute(), 0, 59, 0, ledRingSize - 1);
-}
-
-int secondPosition() {
-	return map(now.second(), 0, 59, 0, ledRingSize - 1);
-}
-
-// Get positions as a float mapped to ring size
-float floatHourPosition() {
+float hourPosition() {
 	if (twelveHour) {
 		int hour;
 		if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
@@ -280,11 +252,11 @@ float floatHourPosition() {
 	}
 }
 
-float floatMinutePosition() {
+float minutePosition() {
 	return mapFloat((float)now.minute() + ((1.0 / 60.0) * (float)now.second()), 0.0, 59.0, 0.0, (float)ledRingSize);
 }
 
-float floatSecondPosition() {
+float secondPosition() {
 	return mapFloat(now.second() + (0.001 * milliseconds), 0.0, 60.0, 0.0, (float)ledRingSize);
 }
 
@@ -292,7 +264,7 @@ float floatSecondPosition() {
 CRGB hourColor() {
 	if (colorScheme < colorSchemeCount) return colorSchemes[colorScheme][0];
 	else if (colorScheme == colorSchemeCount + 0) {
-		return white;
+		return CHSV(map(now.hour(), 0, 24, 0, 255), 255, 255);
 	} else if (colorScheme == colorSchemeCount + 1) {
 	    return CHSV((uint8_t)mapFloat(fmod(20.0 - floatHour(), 24.0), 0.0, 24.0, 0.0, 255.0), 255, 255);
 	}
@@ -301,7 +273,7 @@ CRGB hourColor() {
 CRGB minuteColor() {
 	if (colorScheme < colorSchemeCount) return colorSchemes[colorScheme][1];
 	else if (colorScheme == colorSchemeCount + 0) {
-		return white;
+		return CHSV(map(now.minute(), 0, 59, 0, 255), 255, 255);
 	} else if (colorScheme == colorSchemeCount + 1) {
 		return CHSV((uint8_t)mapFloat(fmod(20.0 - floatHour(), 24.0), 0.0, 24.0, 0.0, 255.0), 255, 255);
 	}
@@ -310,7 +282,7 @@ CRGB minuteColor() {
 CRGB secondColor() {
 	if (colorScheme < colorSchemeCount) return colorSchemes[colorScheme][2];
 	else if (colorScheme == colorSchemeCount + 0) {
-		return white;
+		return CHSV(map(now.second(), 0, 59, 0, 255), 255, 255);
 	} else if (colorScheme == colorSchemeCount + 1) {
 		return CHSV((uint8_t)mapFloat(fmod(20.0 - floatHour(), 24.0), 0.0, 24.0, 0.0, 255.0), 255, 255);
 	}
@@ -318,12 +290,7 @@ CRGB secondColor() {
 
 // Clear the LED ring
 void clearLeds() {
-	for (int i = 0; i < ledRingSize; i++) {
-		leds[i] = CRGB(0, 0, 0);
-		//leds[i].r = max(leds[i].r - 1, 0);
-		//leds[i].g = max(leds[i].g - 2, 0);
-		//leds[i].b = max(leds[i].b - 3, 0);
-	}
+	for (int i = 0; i < ledRingSize; i++) leds[i] = CRGB(0, 0, 0);
 }
 
 // Set LED(s) at a position with enhanced rendering
