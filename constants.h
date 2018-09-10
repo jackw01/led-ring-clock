@@ -51,6 +51,9 @@ const bool twelveHour = true;
 const int hourGlowWidth = 4; // Pixels in each direction
 const int minuteGlowWidth = 2; // Pixels in each direction
 const int secondGlowWidth = 1; // Pixels in each direction
+const int hourTrailLength = 1;
+const int minuteTrailLength = 2;
+const int secondTrailLength = 3;
 const int buttonClickRepeatDelayMs = 1500;
 const int buttonLongPressDelayMs = 300;
 

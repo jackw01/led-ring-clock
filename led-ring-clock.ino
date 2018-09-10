@@ -191,9 +191,11 @@ void drawDotClockTrail() {
     float m = minutePosition();
     float s = secondPosition();
 
-	for (float i = h - 1.0; i < h + 2.0; i++) setLed(i, hourColor(), BlendModeAdd, 1.0);
-	for (float i = -4.0; i < 1.0; i++) setLed(m + i, minuteColor(), BlendModeAdd, 1.0 + (i / 5.0));
-	if (showSecondHand) for (float i = -3.0; i < 1.0; i++) setLed(s + i, secondColor(), BlendModeAdd, 1.0 + (i / 4.0));
+	for (float i = -hourTrailLength; i < 1.0; i++) setLed(h + i, hourColor(), BlendModeAdd, mapFloat(i, -hourTrailLength, 1.0, 0.1, 1.0));
+	for (float i = -minuteTrailLength; i < 1.0; i++) setLed(m + i, minuteColor(), BlendModeAdd, mapFloat(i, -minuteTrailLength, 1.0, 0.1, 1.0));
+	if (showSecondHand) {
+		for (float i = -secondTrailLength; i < 1.0; i++) setLed(s + i, secondColor(), BlendModeAdd, mapFloat(i, -secondTrailLength, 1.0, 0.1, 1.0));
+	}
 
     FastLED.show();
 }
@@ -215,21 +217,6 @@ void drawDotClockGlow() {
 			setLed(i, secondColor(), BlendModeAdd, mapFloat(fabs(s - i), 0.0, secondGlowWidth, 1.0, 0.1));
 		}
 	}
-	/*
-    for (int i = -6; i < ledRingSize + 6; i++) {
-		int j;
-		for (j = 0; j <= 4; j++) {
-			if (h + j == i || h - j == i) blendAdd(wrap(i), CRGB(255, 0, 0), 1 - mapFloat(j, 0.0, 6.0, 0.1, 0.99));
-		}
-		for (j = 0; j <= 2; j++) {
-			if (m + j == i || m - j == i) blendAdd(wrap(i), CRGB(0, 255, 0), 1 - mapFloat(j, 0.0, 3.0, 0.1, 0.99));
-		}
-		if (showSecondHand) {
-			for (j = 0; j <= 1; j++) {
-				if (s + j == i || s - j == i) blendAdd(wrap(i), CRGB(0, 0, 255), 1 - mapFloat(j, 0.0, 1.0, 0.1, 0.65));
-			}
-		}
-    }*/
 
     FastLED.show();
 }
