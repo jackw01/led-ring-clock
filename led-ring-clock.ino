@@ -232,15 +232,15 @@ float hourPosition() {
 		int hour;
 		if (now.hour() > 12) hour = (now.hour() - 12) * (ledRingSize / 12);
 	    else hour = now.hour() * (ledRingSize / 12);
-		return hour + mapFloat(now.minute(), 0.0, 59.0, 0.0, (ledRingSize / 12.0) - 1.0);
+		return hour + mapFloat(now.minute() + 0.001, 0.0, 59.0, 0.0, (ledRingSize / 12.0) - 1.0);
 	} else {
 		int hour = now.hour() * (ledRingSize / 24);
-		return hour + mapFloat(now.minute(), 0, 59, 0, (ledRingSize / 24.0) - 1.0);
+		return hour + mapFloat(now.minute() + 0.001, 0, 59, 0, (ledRingSize / 24.0) - 1.0);
 	}
 }
 
 float minutePosition() {
-	return mapFloat((float)now.minute() + ((1.0 / 60.0) * (float)now.second()), 0.0, 59.0, 0.0, (float)ledRingSize);
+	return mapFloat((float)now.minute() + ((0.001 + 1.0 / 60.0) * (float)now.second()), 0.0, 59.0, 0.0, (float)ledRingSize);
 }
 
 float secondPosition() {
